@@ -42,19 +42,33 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    final savedRole = _preferences!.getString('quickserve.role');
-    if (savedRole != null) {
-      role = AppRole.values.byName(savedRole);
-      authenticated = true;
-    }
+    final user = supabase?.auth.currentUser;
 
-    _loadLocalRequests();
+if (user != null) {
+  actorId = user.id;
+
+  final profile = await supabase!
+      .from('profiles')
+      .select('full_name, role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+  if (profile != null) {
+    actorName = profile['full_name'] as String? ?? '';
+    role = AppRole.values.firstWhere(
+      (r) => r.name.toUpperCase() == profile['role'],
+      orElse: () => AppRole.customer,
+    );
+    authenticated = true;
+  }
+}
+
+_loadLocalRequests();
   }
 
 Future<void> signIn(
   String email,
   String password,
-  AppRole requestedRole,
 ) async {
   loading = true;
   errorMessage = null;
@@ -97,10 +111,16 @@ Future<void> signIn(
 
     authenticated = true;
 
-    await _persistSession();
+if (role == AppRole.admin) {
+  await loadAdminRequests();
+} else if (role == AppRole.agent) {
+  await loadAgentRequests();
+}
 
-    logEvent(
-      'LOGIN_SUCCESS',
+await _persistSession();
+
+logEvent(
+  'LOGIN_SUCCESS',
       actorId,
       '',
       'Signed in successfully',
@@ -126,33 +146,180 @@ Future<void> signIn(
   loading = false;
   notifyListeners();
 }
+Future<void> loadAdminRequests() async {
+  if (supabase == null || role != AppRole.admin) return;
+
+  try {
+    final rows = await supabase!
+        .from('service_requests')
+        .select()
+        .order('created_at', ascending: false);
+
+    final loadedRequests = rows.map<ServiceRequest>((row) {
+      final service = switch (row['service_key'] as String) {
+        'ac' => ServiceType.ac,
+        'plumbing' => ServiceType.plumbing,
+        'electrical' => ServiceType.electrical,
+        'cleaning' => ServiceType.cleaning,
+        _ => ServiceType.ac,
+      };
+
+      final priority = switch (row['priority'] as String) {
+        'LOW' => Priority.low,
+        'HIGH' => Priority.high,
+        _ => Priority.medium,
+      };
+
+      final status = switch (row['status'] as String) {
+        'ASSIGNED' => RequestStatus.assigned,
+        'ACCEPTED' => RequestStatus.accepted,
+        'IN_PROGRESS' => RequestStatus.inProgress,
+        'COMPLETED' => RequestStatus.completed,
+        'CANCELLED' => RequestStatus.cancelled,
+        _ => RequestStatus.created,
+      };
+
+      return ServiceRequest(
+        id: row['request_id'] as String,
+        customerId: row['customer_id'] as String,
+        service: service,
+        description: row['description'] as String? ?? '',
+        preferredDate: DateTime.parse(
+          row['preferred_date'] as String,
+        ),
+        preferredTime: row['preferred_time'] as String? ?? '',
+        address: row['address'] as String? ?? '',
+        priority: priority,
+        status: status,
+        assignedAgent: row['agent_id'] as String?,
+      );
+    }).toList();
+
+    requests
+      ..clear()
+      ..addAll(loadedRequests);
+
+    debugPrint(
+      'Admin loaded ${loadedRequests.length} requests from Supabase',
+    );
+  } catch (e) {
+    errorMessage = 'Failed to load requests: $e';
+    debugPrint('Admin request load error: $e');
+  }
+
+  notifyListeners();
+}
+Future<void> loadAgentRequests() async {
+  if (supabase == null || role != AppRole.agent) return;
+
+  try {
+    final rows = await supabase!
+        .from('service_requests')
+        .select()
+        .eq('agent_id', actorId)
+        .order('created_at', ascending: false);
+
+    final loadedRequests = rows.map<ServiceRequest>((row) {
+      final service = switch (row['service_key'] as String) {
+        'ac' => ServiceType.ac,
+        'plumbing' => ServiceType.plumbing,
+        'electrical' => ServiceType.electrical,
+        'cleaning' => ServiceType.cleaning,
+        _ => ServiceType.ac,
+      };
+
+      final priority = switch (row['priority'] as String) {
+        'LOW' => Priority.low,
+        'HIGH' => Priority.high,
+        _ => Priority.medium,
+      };
+
+      final status = switch (row['status'] as String) {
+        'ASSIGNED' => RequestStatus.assigned,
+        'ACCEPTED' => RequestStatus.accepted,
+        'IN_PROGRESS' => RequestStatus.inProgress,
+        'COMPLETED' => RequestStatus.completed,
+        'CANCELLED' => RequestStatus.cancelled,
+        _ => RequestStatus.created,
+      };
+
+      return ServiceRequest(
+        id: row['request_id'] as String,
+        customerId: row['customer_id'] as String,
+        service: service,
+        description: row['description'] as String? ?? '',
+        preferredDate: DateTime.parse(
+          row['preferred_date'] as String,
+        ),
+        preferredTime: row['preferred_time'] as String? ?? '',
+        address: row['address'] as String? ?? '',
+        priority: priority,
+        status: status,
+        assignedAgent: row['agent_id'] as String?,
+      );
+    }).toList();
+
+    requests
+      ..clear()
+      ..addAll(loadedRequests);
+
+    debugPrint(
+      'Agent loaded ${loadedRequests.length} assigned requests from Supabase',
+    );
+  } catch (e) {
+    errorMessage = 'Failed to load assigned requests: $e';
+    debugPrint('Agent request load error: $e');
+  }
+
+  notifyListeners();
+}
 
   Future<void> register(String name, String email, String password) async {
     loading = true;
     errorMessage = null;
     notifyListeners();
 
-    try {
-      if (supabase != null) {
-        await supabase!.auth.signUp(
-          email: email,
-          password: password,
-          data: {'full_name': name, 'role': 'CUSTOMER'},
-        );
-      }
+     try {
+    if (supabase == null) {
+      throw Exception('Supabase is not configured.');
+    }
 
-      actorName = name;
-      actorId = 'customer-demo';
-      role = AppRole.customer;
+    final response = await supabase!.auth.signUp(
+      email: email.trim(),
+      password: password,
+      data: {
+        'full_name': name.trim(),
+        'role': 'CUSTOMER',
+      },
+    );
+
+    final user = response.user;
+
+    if (user == null) {
+      throw Exception('Registration failed. User was not created.');
+    }
+
+    actorId = user.id;
+    role = AppRole.customer;
+    actorName = name.trim();
+
+    if (response.session != null) {
       authenticated = true;
       await _persistSession();
-    } catch (e) {
-  errorMessage = 'Registration failed: $e';
-}
-
-    loading = false;
-    notifyListeners();
+    } else {
+      authenticated = false;
+      errorMessage =
+          'Account created. Please verify your email before signing in.';
+    }
+  } on AuthException catch (e) {
+    errorMessage = e.message;
+  } catch (e) {
+    errorMessage = 'Registration failed: $e';
   }
+
+  loading = false;
+  notifyListeners();
+}
 
   Future<void> resetPassword(String email) async {
     if (supabase != null) {
@@ -161,91 +328,240 @@ Future<void> signIn(
   }
 
   Future<void> signOut() async {
+  try {
     if (supabase != null) {
       await supabase!.auth.signOut();
     }
-
+  } finally {
     await _preferences?.remove('quickserve.role');
+
     role = AppRole.customer;
-    actorId = 'customer-demo';
+    actorId = '';
+    actorName = '';
     authenticated = false;
+    errorMessage = null;
+
     notifyListeners();
   }
+}
 
   Future<ServiceRequest?> createRequest({
-    required ServiceType service,
-    required String description,
-    required DateTime date,
-    required String time,
-    required String address,
-    required Priority priority,
-  }) async {
-    if (role != AppRole.customer && role != AppRole.admin) {
-      errorMessage = 'Only customers and administrators can create requests.';
-      logEvent('AUTHORIZATION_FAILED', actorId, '', 'Create request denied');
-      notifyListeners();
-      return null;
-    }
+  required ServiceType service,
+  required String description,
+  required DateTime date,
+  required String time,
+  required String address,
+  required Priority priority,
+}) async {
+  if (role != AppRole.customer && role != AppRole.admin) {
+    errorMessage = 'Only customers and administrators can create requests.';
+    logEvent('AUTHORIZATION_FAILED', actorId, '', 'Create request denied');
+    notifyListeners();
+    return null;
+  }
+  debugPrint('ROLE: $role');
+debugPrint('ACTOR ID: $actorId');
+debugPrint('SUPABASE: ${supabase != null}');
 
-    final id = 'REQ-${date.year}-${(requests.length + 124).toString().padLeft(6, '0')}';
+  if (supabase == null) {
+    errorMessage = 'Supabase is not configured.';
+    notifyListeners();
+    return null;
+  }
+
+  loading = true;
+  errorMessage = null;
+  notifyListeners();
+
+  try {
+    debugPrint('CREATING REQUEST IN SUPABASE...');
+    final row = await supabase!
+        .from('service_requests')
+        .insert({
+          'customer_id': actorId,
+          'service_key': service.name,
+          'description': description.trim(),
+          'preferred_date':
+              '${date.year.toString().padLeft(4, '0')}-'
+              '${date.month.toString().padLeft(2, '0')}-'
+              '${date.day.toString().padLeft(2, '0')}',
+          'preferred_time': time,
+          'address': address.trim(),
+          'priority': priority.name.toUpperCase(),
+          'status': 'CREATED',
+        })
+        .select()
+        .single();
+
     final request = ServiceRequest(
-      id: id,
-      customerId: actorId,
+      id: row['request_id'] as String,
+      customerId: row['customer_id'] as String,
       service: service,
-      description: description,
-      preferredDate: date,
-      preferredTime: time,
-      address: address,
+      description: row['description'] as String,
+      preferredDate: DateTime.parse(row['preferred_date'] as String),
+      preferredTime: row['preferred_time'] as String,
+      address: row['address'] as String,
       priority: priority,
       status: RequestStatus.created,
     );
 
     requests.insert(0, request);
-    logEvent('REQUEST_CREATED', actorId, id, 'Created ${service.label} request');
-    await _persistRequests();
+
+    logEvent(
+      'REQUEST_CREATED',
+      actorId,
+      request.id,
+      'Created ${service.label} request',
+    );
+
+    loading = false;
     notifyListeners();
+
     return request;
+  } catch (e) {
+    debugPrint('CREATE REQUEST ERROR: $e');
+    errorMessage = 'Failed to create request: $e';
+
+    logEvent(
+      'DATABASE_ERROR',
+      actorId,
+      '',
+      'Failed to create service request',
+    );
+
+    loading = false;
+    notifyListeners();
+
+    return null;
+  }
+}
+
+  Future<bool> updateStatus(
+  ServiceRequest request,
+  RequestStatus next, {
+  String? note,
+}) async {
+  if (supabase == null) {
+    errorMessage = 'Supabase is not configured.';
+    notifyListeners();
+    return false;
   }
 
-  Future<bool> updateStatus(ServiceRequest request, RequestStatus next,
-      {String? note}) async {
-    if (!canManageRequest(role: role, actorId: actorId, request: request) &&
-        role != AppRole.customer) {
-      logEvent('AUTHORIZATION_FAILED', actorId, request.id, 'Status update denied');
-      errorMessage = 'You are not authorized to update this request.';
-      notifyListeners();
-      return false;
-    }
+  if (!canManageRequest(
+        role: role,
+        actorId: actorId,
+        request: request,
+      ) &&
+      role != AppRole.customer) {
+    logEvent(
+      'AUTHORIZATION_FAILED',
+      actorId,
+      request.id,
+      'Status update denied',
+    );
+    errorMessage = 'You are not authorized to update this request.';
+    notifyListeners();
+    return false;
+  }
 
-    if (!isValidTransition(request.status, next) && next != RequestStatus.cancelled) {
-      errorMessage = 'That status transition is not allowed.';
-      notifyListeners();
-      return false;
-    }
+  if (!isValidTransition(request.status, next) &&
+      next != RequestStatus.cancelled) {
+    errorMessage = 'That status transition is not allowed.';
+    notifyListeners();
+    return false;
+  }
+
+  try {
+    await supabase!.rpc(
+      'update_request_status',
+      params: {
+        'p_request_id': request.id,
+        'p_new_status': next == RequestStatus.inProgress
+    ? 'IN_PROGRESS'
+    : next.name.toUpperCase(),
+        'p_note': note,
+      },
+    );
 
     request.status = next;
     request.agentNote = note ?? request.agentNote;
-    logEvent('REQUEST_UPDATED', actorId, request.id, 'Status changed to ${next.label}');
-    await _persistRequests();
+
+    logEvent(
+      'REQUEST_UPDATED',
+      actorId,
+      request.id,
+      'Status changed to ${next.label}',
+    );
+
     notifyListeners();
     return true;
+  } catch (e) {
+    errorMessage = 'Failed to update request status: $e';
+    debugPrint('Status update error: $e');
+    notifyListeners();
+    return false;
+  }
+}
+Future<bool> assignAgent(ServiceRequest request, String agent) async {
+  if (role != AppRole.admin) {
+    errorMessage = 'Only administrators can assign agents.';
+    logEvent(
+      'AUTHORIZATION_FAILED',
+      actorId,
+      request.id,
+      'Assignment denied',
+    );
+    notifyListeners();
+    return false;
   }
 
-  Future<bool> assignAgent(ServiceRequest request, String agent) async {
-    if (role != AppRole.admin) {
-      errorMessage = 'Only administrators can assign agents.';
-      logEvent('AUTHORIZATION_FAILED', actorId, request.id, 'Assignment denied');
+  if (supabase == null) {
+    errorMessage = 'Supabase is not configured.';
+    notifyListeners();
+    return false;
+  }
+
+  try {
+    final agentProfile = await supabase!
+        .from('profiles')
+        .select('id')
+        .eq('email', agent)
+        .eq('role', 'AGENT')
+        .maybeSingle();
+
+    if (agentProfile == null) {
+      errorMessage = 'Agent not found.';
       notifyListeners();
       return false;
     }
 
-    request.assignedAgent = agent;
+    await supabase!.rpc(
+      'assign_request_agent',
+      params: {
+        'p_request_id': request.id,
+        'p_agent_id': agentProfile['id'],
+      },
+    );
+
+    request.assignedAgent = agentProfile['id'] as String;
     request.status = RequestStatus.assigned;
-    logEvent('REQUEST_ASSIGNED', actorId, request.id, 'Assigned to $agent');
-    await _persistRequests();
+
+    logEvent(
+      'REQUEST_ASSIGNED',
+      actorId,
+      request.id,
+      'Assigned to $agent',
+    );
+
     notifyListeners();
     return true;
+  } catch (e) {
+    errorMessage = 'Failed to assign agent: $e';
+    debugPrint('Agent assignment error: $e');
+    notifyListeners();
+    return false;
   }
+}
 
   void logEvent(String type, String actor, String entity, String message) {
     auditLogs.insert(

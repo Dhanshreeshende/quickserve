@@ -47,9 +47,13 @@ class QuickServeApp extends StatelessWidget {
               fillColor: Colors.white,
             ),
           ),
-          home: state.authenticated
-              ? HomeShell(state: state)
-              : AuthScreen(state: state),
+          home: !state.authenticated
+    ? AuthScreen(state: state)
+    : state.role == AppRole.customer
+        ? HomeShell(state: state)
+        : state.role == AppRole.agent
+            ? AgentScreen(state: state)
+            : AdminScreen(state: state),
         );
       },
     );
@@ -66,6 +70,7 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  AppRole selectedRole = AppRole.customer;
   bool register = false;
   final email = TextEditingController();
   final password = TextEditingController();
@@ -87,17 +92,10 @@ class _AuthScreenState extends State<AuthScreen> {
         password.text,
       );
     } else {
-      final requestedRole = email.text.toLowerCase().contains('admin')
-          ? AppRole.admin
-          : email.text.toLowerCase().contains('agent')
-              ? AppRole.agent
-              : AppRole.customer;
-
       await widget.state.signIn(
-        email.text,
-        password.text,
-        requestedRole,
-      );
+  email.text,
+  password.text,
+);
     }
 
     if (mounted && widget.state.errorMessage != null) {
@@ -156,6 +154,51 @@ class _AuthScreenState extends State<AuthScreen> {
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 26),
+                  const Align(
+  alignment: Alignment.centerLeft,
+  child: Text(
+    'Sign in as',
+    style: TextStyle(
+      fontWeight: FontWeight.w700,
+      fontSize: 14,
+    ),
+  ),
+),
+
+const SizedBox(height: 10),
+
+SegmentedButton<AppRole>(
+  segments: const [
+    ButtonSegment<AppRole>(
+      value: AppRole.customer,
+      label: Text('Customer'),
+      icon: Icon(Icons.person_outline),
+    ),
+    ButtonSegment<AppRole>(
+      value: AppRole.agent,
+      label: Text('Agent'),
+      icon: Icon(Icons.engineering_outlined),
+    ),
+    ButtonSegment<AppRole>(
+      value: AppRole.admin,
+      label: Text('Admin'),
+      icon: Icon(Icons.admin_panel_settings_outlined),
+    ),
+  ],
+  selected: {selectedRole},
+  onSelectionChanged: (selection) {
+    setState(() {
+      selectedRole = selection.first;
+
+      // Only Customer can register.
+      if (selectedRole != AppRole.customer) {
+        register = false;
+      }
+    });
+  },
+),
+
+const SizedBox(height: 18),
                   if (register)
                     TextField(
                       controller: name,
@@ -180,14 +223,15 @@ class _AuthScreenState extends State<AuthScreen> {
                       child: Text(register ? 'Create account' : 'Sign in'),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () => setState(() => register = !register),
-                    child: Text(
-                      register
-                          ? 'Already have an account? Sign in'
-                          : 'New to QuickServe? Create an account',
-                    ),
-                  ),
+                  if (selectedRole == AppRole.customer)
+  TextButton(
+    onPressed: () => setState(() => register = !register),
+    child: Text(
+      register
+          ? 'Already have an account? Sign in'
+          : 'New to QuickServe? Create an account',
+    ),
+  ),
                   TextButton(
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.maybeOf(context);
@@ -269,6 +313,19 @@ class HomeScreen extends StatelessWidget {
 
   final AppState state;
 
+  String _greeting() {
+    final hour = DateTime.now().hour;
+
+    if (hour < 12) {
+      return 'Good morning';
+    } else if (hour < 17) {
+      return 'Good afternoon';
+    } else {
+      return 'Good evening';
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final activeItems = state.visibleRequests
@@ -280,7 +337,7 @@ class HomeScreen extends StatelessWidget {
     final active = activeItems.isEmpty ? null : activeItems.first;
 
     return AppPage(
-      title: 'Good morning, ${state.actorName}',
+      title: '${_greeting()}, ${state.actorName}',
       eyebrow: DateFormat('EEEE, d MMMM').format(DateTime.now()),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -428,19 +485,34 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   }
 
   Future<void> create() async {
-    final request = await widget.state.createRequest(
-      service: service,
-      description: description.text,
-      date: date,
-      time: time.text,
-      address: address.text,
-      priority: priority,
+    debugPrint('SUBMIT BUTTON CLICKED');
+  final request = await widget.state.createRequest(
+    service: service,
+    description: description.text,
+    date: date,
+    time: time.text,
+    address: address.text,
+    priority: priority,
+  );
+
+  if (!mounted) return;
+
+  if (request != null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Request submitted successfully'),
+      ),
     );
 
-    if (request != null && mounted) {
-      Navigator.pop(context);
-    }
+    Navigator.pop(context);
+  } else if (widget.state.errorMessage != null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(widget.state.errorMessage!),
+      ),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -747,32 +819,417 @@ class AgentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppPage(
-      title: 'Agent workspace',
-      eyebrow: 'ASSIGNED WORK',
-      child: Column(
-        children: [
-          ...state.visibleRequests
-              .where(
-                (r) => r.assignedAgent == state.actorId || r.assignedAgent != null,
-              )
-              .map(
-                (r) => Card(
-                  child: ListTile(
-                    title: Text(r.service.label),
-                    subtitle: Text('${r.id} · ${r.status.label}'),
-                    trailing: PopupMenuButton<RequestStatus>(
-                      onSelected: (status) => state.updateStatus(r, status),
-                      itemBuilder: (_) => lifecycle
-                          .map(
-                            (s) => PopupMenuItem(value: s, child: Text(s.label)),
-                          )
-                          .toList(),
+    final assignedRequests = state.visibleRequests
+        .where((r) => r.assignedAgent == state.actorId)
+        .toList();
+
+    final accepted = assignedRequests
+        .where((r) => r.status == RequestStatus.accepted)
+        .length;
+
+    final inProgress = assignedRequests
+        .where((r) => r.status == RequestStatus.inProgress)
+        .length;
+
+    final completed = assignedRequests
+        .where((r) => r.status == RequestStatus.completed)
+        .length;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F7F4),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF8F7F4),
+        elevation: 0,
+        title: const Text(
+          'QuickServe',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: state.signOut,
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () async {
+  await Future<void>.delayed(Duration.zero);
+},
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
+            children: [
+              Text(
+                'Good morning, ${state.actorName}',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              Text(
+                'Here is your assigned work.',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 15,
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
+              // Summary cards
+              Row(
+                children: [
+                  Expanded(
+                    child: _AgentStatCard(
+                      value: '${assignedRequests.length}',
+                      label: 'Assigned',
+                      icon: Icons.assignment_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _AgentStatCard(
+                      value: '$accepted',
+                      label: 'Accepted',
+                      icon: Icons.check_circle_outline,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _AgentStatCard(
+                      value: '$inProgress',
+                      label: 'In progress',
+                      icon: Icons.timelapse,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              _AgentStatCard(
+                value: '$completed',
+                label: 'Completed work',
+                icon: Icons.task_alt,
+                wide: true,
+              ),
+
+              const SizedBox(height: 28),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Assigned requests',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    '${assignedRequests.length}',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              if (assignedRequests.isEmpty)
+                Card(
+                  elevation: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.assignment_turned_in_outlined,
+                          size: 48,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'No requests assigned yet',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'New assignments will appear here.',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...assignedRequests.map(
+                  (request) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _AgentRequestCard(
+                      request: request,
+                      onAccept: request.status == RequestStatus.assigned
+                          ? () => state.updateStatus(
+                                request,
+                                RequestStatus.accepted,
+                              )
+                          : null,
+                      onStart: request.status == RequestStatus.accepted
+                          ? () => state.updateStatus(
+                                request,
+                                RequestStatus.inProgress,
+                              )
+                          : null,
+                      onComplete: request.status == RequestStatus.inProgress
+                          ? () => state.updateStatus(
+                                request,
+                                RequestStatus.completed,
+                              )
+                          : null,
                     ),
                   ),
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentStatCard extends StatelessWidget {
+  const _AgentStatCard({
+    required this.value,
+    required this.label,
+    required this.icon,
+    this.wide = false,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: const Color(0xFFFFE7DF),
+              child: Icon(
+                icon,
+                color: const Color(0xFFF26B4D),
               ),
-        ],
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentRequestCard extends StatelessWidget {
+  const _AgentRequestCard({
+    required this.request,
+    this.onAccept,
+    this.onStart,
+    this.onComplete,
+  });
+
+  final ServiceRequest request;
+  final VoidCallback? onAccept;
+  final VoidCallback? onStart;
+  final VoidCallback? onComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFFFFE7DF),
+                  child: Icon(
+                    Icons.home_repair_service,
+                    color: const Color(0xFFF26B4D),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request.service.label,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        request.id,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _StatusBadge(status: request.status),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            Text(
+              request.description,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 18,
+                  color: Colors.grey.shade600,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    request.address,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            if (onAccept != null)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: onAccept,
+                  child: const Text('Accept request'),
+                ),
+              ),
+
+            if (onStart != null)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: onStart,
+                  child: const Text('Start work'),
+                ),
+              ),
+
+            if (onComplete != null)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: onComplete,
+                  child: const Text('Mark completed'),
+                ),
+              ),
+
+            if (request.status == RequestStatus.completed)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: Color(0xFF1E9E96),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Work completed',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+
+  final RequestStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFE7DF),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status.label,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -844,15 +1301,11 @@ class AdminScreen extends StatelessWidget {
                     }
                   },
                   itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'assign:Rohan Mehta',
-                      child: Text('Assign Rohan Mehta'),
-                    ),
-                    const PopupMenuItem(
-                      value: 'assign:Ankit Pawar',
-                      child: Text('Assign Ankit Pawar'),
-                    ),
-                    ...lifecycle.map(
+  const PopupMenuItem(
+    value: 'assign:agent@quickserve.com',
+    child: Text('Assign agent@quickserve.com'),
+  ),
+  ...lifecycle.map(
                       (s) => PopupMenuItem(value: s.name, child: Text('Set ${s.label}')),
                     ),
                   ],
