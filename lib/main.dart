@@ -1235,10 +1235,28 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class AdminScreen extends StatelessWidget {
+class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key, required this.state});
 
   final AppState state;
+
+  @override
+  State<AdminScreen> createState() => _AdminScreenState();
+}
+
+class _AdminScreenState extends State<AdminScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  String search = '';
+  RequestStatus? statusFilter;
+
+  AppState get state => widget.state;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1247,87 +1265,338 @@ class AdminScreen extends StatelessWidget {
         status: state.requests.where((r) => r.status == status).length,
     };
 
+    final query = search.trim().toLowerCase();
+
+    final filteredRequests = state.requests.where((request) {
+      final matchesSearch =
+          query.isEmpty ||
+          request.id.toLowerCase().contains(query) ||
+          request.service.label.toLowerCase().contains(query) ||
+          request.address.toLowerCase().contains(query);
+
+      final matchesStatus =
+          statusFilter == null || request.status == statusFilter;
+
+      return matchesSearch && matchesStatus;
+    }).toList();
+
     return AppPage(
       title: 'Operations console',
       eyebrow: 'ADMIN PORTAL',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Dashboard
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: counts.entries
-                .map(
-                  (e) => SizedBox(
-                    width: 130,
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${e.value}',
-                              style: const TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            Text(e.key.label),
-                          ],
+            spacing: 12,
+            runSpacing: 12,
+            children: RequestStatus.values.map((status) {
+              return SizedBox(
+                width: 145,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${counts[status] ?? 0}',
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 4),
+                        Text(status.label),
+                      ],
                     ),
                   ),
-                )
-                .toList(),
+                ),
+              );
+            }).toList(),
           ),
-          const SizedBox(height: 18),
+
+          const SizedBox(height: 28),
+
           const Text(
             'Request management',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          ...state.requests.map(
-            (r) => Card(
-              child: ListTile(
-                title: Text('${r.service.label} · ${r.id}'),
-                subtitle: Text('${r.status.label} · ${r.address}'),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value.startsWith('assign:')) {
-                      state.assignAgent(r, value.substring(7));
-                    } else {
-                      state.updateStatus(r, RequestStatus.values.byName(value));
-                    }
+
+          const SizedBox(height: 12),
+
+          // Search
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: 'Search by request ID, service or address',
+              suffixIcon: search.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => search = '');
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: (value) {
+              setState(() => search = value);
+            },
+          ),
+
+          const SizedBox(height: 12),
+
+          // Status filters
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                FilterChip(
+                  label: const Text('All'),
+                  selected: statusFilter == null,
+                  onSelected: (_) {
+                    setState(() => statusFilter = null);
                   },
-                  itemBuilder: (_) => [
-  const PopupMenuItem(
-    value: 'assign:agent@quickserve.com',
-    child: Text('Assign agent@quickserve.com'),
-  ),
-  ...lifecycle.map(
-                      (s) => PopupMenuItem(value: s.name, child: Text('Set ${s.label}')),
+                ),
+                ...RequestStatus.values.map(
+                  (status) => Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: FilterChip(
+                      label: Text(status.label),
+                      selected: statusFilter == status,
+                      onSelected: (_) {
+                        setState(() => statusFilter = status);
+                      },
                     ),
-                  ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Text(
+            '${filteredRequests.length} request${filteredRequests.length == 1 ? '' : 's'}',
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          if (filteredRequests.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 42,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'No requests found',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Try changing your search or filter.',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            ...filteredRequests.map(
+              (request) => Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 8,
+                  ),
+                  leading: CircleAvatar(
+                    child: Icon(
+                      request.status == RequestStatus.completed
+                          ? Icons.check
+                          : request.status == RequestStatus.cancelled
+                              ? Icons.close
+                              : Icons.build_outlined,
+                    ),
+                  ),
+                  title: Text(
+                    '${request.service.label} · ${request.id}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Text(
+                      '${request.status.label} · ${request.address}',
+                    ),
+                  ),
+                  onTap: () => _showRequestDetails(context, request),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value.startsWith('assign:')) {
+  state.assignAgent(
+    request,
+    value.substring(7),
+  ).then((success) {
+    if (!success && state.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(state.errorMessage!),
+        ),
+      );
+    }
+  });
+}
+                      else {
+                        state.updateStatus(
+                          request,
+                          RequestStatus.values.byName(value),
+                        );
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'assign:agent2@quickserve.com',
+                        child: Text('Assign agent'),
+                      ),
+                      const PopupMenuDivider(),
+                      ...lifecycle.map(
+                        (status) => PopupMenuItem(
+                          value: status.name,
+                          child: Text('Set ${status.label}'),
+                        ),
+                      ),
+                      ...state.agents.map(
+  (agent) => PopupMenuItem(
+    value: 'assign:${agent['email']}',
+    child: Text(
+      agent['full_name'] ?? agent['email'],
+    ),
+  ),
+),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 18),
+
+          const SizedBox(height: 28),
+
           const Text(
             'Audit activity',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-          ),
-          ...state.auditLogs.take(20).map(
-            (log) => ListTile(
-              dense: true,
-              leading: const Icon(Icons.history),
-              title: Text(log.eventType),
-              subtitle: Text('${log.message} · ${log.actorId}'),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
             ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Card(
+            child: Column(
+              children: state.auditLogs.take(20).map(
+                (log) {
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.history),
+                    title: Text(log.eventType),
+                    subtitle: Text(
+                      '${log.message} · ${log.actorId}',
+                    ),
+                  );
+                },
+              ).toList(),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          const Divider(),
+
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Log out'),
+            onTap: () => state.signOut(),
           ),
         ],
       ),
+    );
+  }
+
+  void _showRequestDetails(
+    BuildContext context,
+    ServiceRequest request,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(request.id),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.service.label,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('Status: ${request.status.label}'),
+                const SizedBox(height: 6),
+                Text('Priority: ${request.priority.label}'),
+                const SizedBox(height: 6),
+                Text('Address: ${request.address}'),
+                const SizedBox(height: 6),
+                Text('Description: ${request.description}'),
+                const SizedBox(height: 6),
+                Text(
+                  'Preferred date: '
+                  '${DateFormat('d MMM yyyy').format(request.preferredDate)}',
+                ),
+                const SizedBox(height: 6),
+                Text('Preferred time: ${request.preferredTime}'),
+                if (request.assignedAgent != null) ...[
+                  const SizedBox(height: 6),
+                  Text('Agent: ${request.assignedAgent}'),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

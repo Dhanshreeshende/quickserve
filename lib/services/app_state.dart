@@ -17,6 +17,7 @@ class AppState extends ChangeNotifier {
   String? errorMessage;
   bool loading = false;
   final requests = <ServiceRequest>[...demoRequests];
+  List<Map<String, dynamic>> agents = [];
   final auditLogs = <AuditLog>[];
 
   bool get supabaseConfigured =>
@@ -113,8 +114,11 @@ Future<void> signIn(
 
 if (role == AppRole.admin) {
   await loadAdminRequests();
+  await loadAgents();
 } else if (role == AppRole.agent) {
   await loadAgentRequests();
+} else if (role == AppRole.customer) {
+  await loadCustomerRequests();
 }
 
 await _persistSession();
@@ -209,6 +213,68 @@ Future<void> loadAdminRequests() async {
 
   notifyListeners();
 }
+Future<void> loadCustomerRequests() async {
+  if (supabase == null || role != AppRole.customer) return;
+
+  try {
+    final rows = await supabase!
+        .from('service_requests')
+        .select()
+        .eq('customer_id', actorId)
+        .order('created_at', ascending: false);
+
+    final loadedRequests = rows.map<ServiceRequest>((row) {
+      final service = switch (row['service_key'] as String) {
+        'ac' => ServiceType.ac,
+        'plumbing' => ServiceType.plumbing,
+        'electrical' => ServiceType.electrical,
+        'cleaning' => ServiceType.cleaning,
+        _ => ServiceType.ac,
+      };
+
+      final priority = switch (row['priority'] as String) {
+        'LOW' => Priority.low,
+        'HIGH' => Priority.high,
+        _ => Priority.medium,
+      };
+
+      final status = switch (row['status'] as String) {
+        'ASSIGNED' => RequestStatus.assigned,
+        'ACCEPTED' => RequestStatus.accepted,
+        'IN_PROGRESS' => RequestStatus.inProgress,
+        'COMPLETED' => RequestStatus.completed,
+        'CANCELLED' => RequestStatus.cancelled,
+        _ => RequestStatus.created,
+      };
+
+      return ServiceRequest(
+        id: row['request_id'] as String,
+        customerId: row['customer_id'] as String,
+        service: service,
+        description: row['description'] as String? ?? '',
+        preferredDate: DateTime.parse(row['preferred_date'] as String),
+        preferredTime: row['preferred_time'] as String? ?? '',
+        address: row['address'] as String? ?? '',
+        priority: priority,
+        status: status,
+        assignedAgent: row['agent_id'] as String?,
+      );
+    }).toList();
+
+    requests
+      ..clear()
+      ..addAll(loadedRequests);
+
+    debugPrint(
+      'Customer loaded ${loadedRequests.length} requests from Supabase',
+    );
+  } catch (e) {
+    errorMessage = 'Failed to load customer requests: $e';
+    debugPrint('Customer request load error: $e');
+  }
+
+  notifyListeners();
+}
 Future<void> loadAgentRequests() async {
   if (supabase == null || role != AppRole.agent) return;
 
@@ -248,9 +314,7 @@ Future<void> loadAgentRequests() async {
         customerId: row['customer_id'] as String,
         service: service,
         description: row['description'] as String? ?? '',
-        preferredDate: DateTime.parse(
-          row['preferred_date'] as String,
-        ),
+        preferredDate: DateTime.parse(row['preferred_date'] as String),
         preferredTime: row['preferred_time'] as String? ?? '',
         address: row['address'] as String? ?? '',
         priority: priority,
@@ -267,8 +331,28 @@ Future<void> loadAgentRequests() async {
       'Agent loaded ${loadedRequests.length} assigned requests from Supabase',
     );
   } catch (e) {
-    errorMessage = 'Failed to load assigned requests: $e';
+    errorMessage = 'Failed to load agent requests: $e';
     debugPrint('Agent request load error: $e');
+  }
+
+  notifyListeners();
+}
+Future<void> loadAgents() async {
+  if (supabase == null || role != AppRole.admin) return;
+
+  try {
+    final rows = await supabase!
+        .from('profiles')
+        .select('id, full_name, email')
+        .eq('role', 'AGENT')
+        .order('full_name');
+
+    agents = List<Map<String, dynamic>>.from(rows);
+
+    debugPrint('Admin loaded ${agents.length} agents from Supabase');
+  } catch (e) {
+    errorMessage = 'Failed to load agents: $e';
+    debugPrint('Agent load error: $e');
   }
 
   notifyListeners();
