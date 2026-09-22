@@ -124,6 +124,7 @@ if (role == AppRole.admin) {
 await _persistSession();
 
 logEvent(
+  
   'LOGIN_SUCCESS',
       actorId,
       '',
