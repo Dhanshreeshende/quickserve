@@ -391,16 +391,48 @@ Future<void> loadAuditLogs() async {
         .order('created_at', ascending: false)
         .limit(20);
 
+    final actorIds = rows
+        .map((row) => row['user_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final Map<String, String> actorNames = {};
+
+    if (actorIds.isNotEmpty) {
+      final profiles = await supabase!
+          .from('profiles')
+          .select('id, full_name, email')
+          .inFilter('id', actorIds);
+
+      for (final profile in profiles) {
+        final id = profile['id']?.toString();
+        if (id != null) {
+          actorNames[id] =
+              (profile['full_name']?.toString().trim().isNotEmpty ?? false)
+                  ? profile['full_name'].toString()
+                  : profile['email']?.toString() ?? 'User';
+        }
+      }
+    }
+
     auditLogs = rows.map((row) {
+      final userId = row['user_id']?.toString();
+
       return AuditLog(
         eventType: row['event_type'] as String,
-        actorId: row['user_id']?.toString() ?? 'System',
+        actorId: userId == null || userId.isEmpty
+            ? 'System'
+            : actorNames[userId] ?? 'User',
         entityId: row['entity_id']?.toString() ?? '',
         message: row['metadata']?.toString() ?? '',
       );
     }).toList();
 
-    debugPrint('Admin loaded ${auditLogs.length} audit logs from Supabase');
+    debugPrint(
+      'Admin loaded ${auditLogs.length} audit logs from Supabase',
+    );
   } catch (e) {
     errorMessage = 'Failed to load audit logs: $e';
     debugPrint('Audit log load error: $e');

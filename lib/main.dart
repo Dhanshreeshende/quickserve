@@ -816,54 +816,7 @@ class AgentScreen extends StatelessWidget {
   const AgentScreen({super.key, required this.state});
 
   final AppState state;
-  Future<void> _addNote(
-  BuildContext context,
-  AppState state,
-  ServiceRequest request,
-) async {
-  final controller = TextEditingController();
 
-  final note = await showDialog<String>(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('Add note'),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: 'Enter a note about this service request...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = controller.text.trim();
-
-              if (value.isNotEmpty) {
-                Navigator.pop(context, value);
-              }
-            },
-            child: const Text('Save note'),
-          ),
-        ],
-      );
-    },
-  );
-
-  if (note == null || note.isEmpty) return;
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Note saved.'),
-    ),
-  );
-}
   Future<void> _updateWithNote(
     BuildContext context,
     AppState state,
@@ -1109,11 +1062,6 @@ class AgentScreen extends StatelessWidget {
         RequestStatus.completed,
       )
     : null,
-  onAddNote: () => _addNote(
-    context,
-    state,
-    request,
-  ),
 ),
                       
                   ),
@@ -1187,14 +1135,14 @@ class _AgentRequestCard extends StatelessWidget {
   this.onAccept,
   this.onStart,
   this.onComplete,
-  this.onAddNote,
+  
 });
 
   final ServiceRequest request;
   final VoidCallback? onAccept;
   final VoidCallback? onStart;
   final VoidCallback? onComplete;
-  final VoidCallback? onAddNote;
+
 
   @override
   Widget build(BuildContext context) {
@@ -1291,15 +1239,7 @@ class _AgentRequestCard extends StatelessWidget {
                   child: const Text('Start work'),
                 ),
               ),
-              if (onAddNote != null)
-  SizedBox(
-    width: double.infinity,
-    child: OutlinedButton.icon(
-      onPressed: onAddNote,
-      icon: const Icon(Icons.note_add_outlined),
-      label: const Text('Add note'),
-    ),
-  ),
+              
 
             if (onComplete != null)
               SizedBox(
@@ -1668,7 +1608,44 @@ Card(
           ).toList(),
   ),
 ),
+const SizedBox(height: 28),
 
+const Text(
+  'Agents',
+  style: TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w800,
+  ),
+),
+
+const SizedBox(height: 8),
+
+Card(
+  child: Column(
+    children: state.agents.isEmpty
+        ? [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('No agents found'),
+            ),
+          ]
+        : state.agents.map(
+            (agent) {
+              return ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.engineering_outlined),
+                ),
+                title: Text(
+                  agent['full_name'] ?? 'Service Agent',
+                ),
+                subtitle: Text(
+                  agent['email'] ?? '',
+                ),
+              );
+            },
+          ).toList(),
+  ),
+),
 
           const SizedBox(height: 28),
 
