@@ -12,6 +12,6 @@ void main() {
 
     await tester.pumpWidget(QuickServeApp(state: state));
 
-    expect(find.text('Welcome back.'), findsOneWidget);
+    expect(find.text('Welcome to QuickServe.'), findsOneWidget);
   });
 }

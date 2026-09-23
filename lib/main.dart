@@ -3,6 +3,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import 'models/domain.dart';
 import 'services/app_state.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,31 +123,23 @@ class _AuthScreenState extends State<AuthScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Color(0xFFF26B4D),
-                    child: Icon(
-                      Icons.home_repair_service,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'quickserve',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFFF26B4D),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  Text(
-                    register ? 'Create your account.' : 'Welcome back.',
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  
+  ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: SvgPicture.asset(
+      'assets/images/quickserve_logo.svg',
+      height: 90,
+      fit: BoxFit.contain,
+    ),
+  ),
+  const SizedBox(height: 32),
+  Text(
+register ? 'Create your account.' : 'Welcome to QuickServe.',
+    style: const TextStyle(
+      fontSize: 30,
+      fontWeight: FontWeight.w800,
+    ),
+  ),
                   const SizedBox(height: 8),
                   Text(
                     register
@@ -196,68 +190,130 @@ SegmentedButton<AppRole>(
       }
     });
   },
+  style: ButtonStyle(
+    backgroundColor: WidgetStateProperty.resolveWith<Color?>(
+      (states) {
+        if (states.contains(WidgetState.selected)) {
+          return const Color(0xFFE8F0FE);
+        }
+        return Colors.white;
+      },
+    ),
+    foregroundColor: WidgetStateProperty.resolveWith<Color?>(
+      (states) {
+        if (states.contains(WidgetState.selected)) {
+          return const Color(0xFF1565D8);
+        }
+        return const Color(0xFF333333);
+      },
+    ),
+    side: WidgetStateProperty.all(
+      const BorderSide(
+        color: Color(0xFFB8B8B8),
+      ),
+    ),
+  ),
 ),
 
 const SizedBox(height: 18),
-                  if (register)
-                    TextField(
-                      controller: name,
-                      decoration: const InputDecoration(labelText: 'Full name'),
-                    ),
-                  if (register) const SizedBox(height: 12),
-                  TextField(
-                    controller: email,
-                    decoration: const InputDecoration(labelText: 'Email address'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: password,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: widget.state.loading ? null : submit,
-                      child: Text(register ? 'Create account' : 'Sign in'),
-                    ),
-                  ),
-                  if (selectedRole == AppRole.customer)
+
+if (register)
+  TextField(
+    controller: name,
+    decoration: const InputDecoration(
+      labelText: 'Full name',
+    ),
+  ),
+
+if (register) const SizedBox(height: 12),
+
+TextField(
+  controller: email,
+  decoration: const InputDecoration(
+    labelText: 'Email address',
+  ),
+),
+
+const SizedBox(height: 12),
+
+TextField(
+  controller: password,
+  obscureText: true,
+  decoration: const InputDecoration(
+    labelText: 'Password',
+  ),
+),
+
+const SizedBox(height: 16),
+
+SizedBox(
+  width: double.infinity,
+  height: 50,
+  child: FilledButton(
+    onPressed: widget.state.loading ? null : submit,
+    style: FilledButton.styleFrom(
+      backgroundColor: const Color(0xFF1565D8),
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      textStyle: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+    child: Text(
+      register ? 'Create account' : 'Sign in',
+    ),
+  ),
+),
+
+if (selectedRole == AppRole.customer) ...[
   TextButton(
     onPressed: () => setState(() => register = !register),
     child: Text(
       register
           ? 'Already have an account? Sign in'
           : 'New to QuickServe? Create an account',
+      style: const TextStyle(
+        color: Color(0xFF1565D8),
+        fontWeight: FontWeight.w600,
+      ),
     ),
   ),
-                  TextButton(
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.maybeOf(context);
-                      await widget.state.resetPassword(email.text);
+  TextButton(
+    onPressed: () async {
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      await widget.state.resetPassword(email.text);
 
-                      if (!mounted) return;
+      if (!mounted) return;
 
-                      if (messenger != null) {
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'If the email exists, a reset link has been sent.',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    child: const Text('Forgot password?'),
-                  ),
-                ],
-              ),
+      if (messenger != null) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'If the email exists, a reset link has been sent.',
+            ),
+          ),
+        );
+      }
+    },
+    child: const Text(
+      'Forgot password?',
+      style: TextStyle(
+        color: Color(0xFF1565D8),
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  ),
+],
+                            ],
             ),
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }
 
