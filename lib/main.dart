@@ -816,6 +816,111 @@ class AgentScreen extends StatelessWidget {
   const AgentScreen({super.key, required this.state});
 
   final AppState state;
+  Future<void> _addNote(
+  BuildContext context,
+  AppState state,
+  ServiceRequest request,
+) async {
+  final controller = TextEditingController();
+
+  final note = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Add note'),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Enter a note about this service request...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+
+              if (value.isNotEmpty) {
+                Navigator.pop(context, value);
+              }
+            },
+            child: const Text('Save note'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (note == null || note.isEmpty) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Note saved.'),
+    ),
+  );
+}
+  Future<void> _updateWithNote(
+    BuildContext context,
+    AppState state,
+    ServiceRequest request,
+    RequestStatus next,
+  ) async {
+    final controller = TextEditingController();
+
+    final note = await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('Update to ${next.label}'),
+          content: TextField(
+            controller: controller,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Note (optional)',
+              hintText: 'Add a note about this work...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Skip'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  controller.text.trim(),
+                );
+              },
+              child: const Text('Update status'),
+            ),
+          ],
+        );
+      },
+    );
+
+    final success = await state.updateStatus(
+      request,
+      next,
+      note: note?.isEmpty == true ? null : note,
+    );
+
+    if (!context.mounted) return;
+
+    if (!success && state.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(state.errorMessage!)),
+      );
+    }
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -979,26 +1084,38 @@ class AgentScreen extends StatelessWidget {
                   (request) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _AgentRequestCard(
-                      request: request,
-                      onAccept: request.status == RequestStatus.assigned
-                          ? () => state.updateStatus(
-                                request,
-                                RequestStatus.accepted,
-                              )
-                          : null,
-                      onStart: request.status == RequestStatus.accepted
-                          ? () => state.updateStatus(
-                                request,
-                                RequestStatus.inProgress,
-                              )
-                          : null,
-                      onComplete: request.status == RequestStatus.inProgress
-                          ? () => state.updateStatus(
-                                request,
-                                RequestStatus.completed,
-                              )
-                          : null,
-                    ),
+                       request: request,
+  onAccept: request.status == RequestStatus.assigned
+    ? () => _updateWithNote(
+        context,
+        state,
+        request,
+        RequestStatus.accepted,
+      )
+    : null,
+  onStart: request.status == RequestStatus.accepted
+    ? () => _updateWithNote(
+        context,
+        state,
+        request,
+        RequestStatus.inProgress,
+      )
+    : null,
+  onComplete: request.status == RequestStatus.inProgress
+    ? () => _updateWithNote(
+        context,
+        state,
+        request,
+        RequestStatus.completed,
+      )
+    : null,
+  onAddNote: () => _addNote(
+    context,
+    state,
+    request,
+  ),
+),
+                      
                   ),
                 ),
             ],
@@ -1066,16 +1183,18 @@ class _AgentStatCard extends StatelessWidget {
 
 class _AgentRequestCard extends StatelessWidget {
   const _AgentRequestCard({
-    required this.request,
-    this.onAccept,
-    this.onStart,
-    this.onComplete,
-  });
+  required this.request,
+  this.onAccept,
+  this.onStart,
+  this.onComplete,
+  this.onAddNote,
+});
 
   final ServiceRequest request;
   final VoidCallback? onAccept;
   final VoidCallback? onStart;
   final VoidCallback? onComplete;
+  final VoidCallback? onAddNote;
 
   @override
   Widget build(BuildContext context) {
@@ -1172,6 +1291,15 @@ class _AgentRequestCard extends StatelessWidget {
                   child: const Text('Start work'),
                 ),
               ),
+              if (onAddNote != null)
+  SizedBox(
+    width: double.infinity,
+    child: OutlinedButton.icon(
+      onPressed: onAddNote,
+      icon: const Icon(Icons.note_add_outlined),
+      label: const Text('Add note'),
+    ),
+  ),
 
             if (onComplete != null)
               SizedBox(
