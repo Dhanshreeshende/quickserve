@@ -68,6 +68,7 @@ create table if not exists public.audit_logs (
   event_type text not null check (event_type in ('LOGIN_SUCCESS', 'REQUEST_CREATED', 'REQUEST_ASSIGNED', 'REQUEST_UPDATED', 'AUTHORIZATION_FAILED', 'DATABASE_ERROR')),
   entity_type text not null,
   entity_id uuid,
+  
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );

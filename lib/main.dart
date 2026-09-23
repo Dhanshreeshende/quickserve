@@ -1630,6 +1630,45 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 28),
+
+const Text(
+  'Customers',
+  style: TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w800,
+  ),
+),
+
+const SizedBox(height: 8),
+
+Card(
+  child: Column(
+    children: state.customers.isEmpty
+        ? [
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('No customers found'),
+            ),
+          ]
+        : state.customers.map(
+            (customer) {
+              return ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.person_outline),
+                ),
+                title: Text(
+                  customer['full_name'] ?? 'Customer',
+                ),
+                subtitle: Text(
+                  customer['email'] ?? '',
+                ),
+              );
+            },
+          ).toList(),
+  ),
+),
+
 
           const SizedBox(height: 28),
 

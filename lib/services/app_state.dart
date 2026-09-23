@@ -18,7 +18,8 @@ class AppState extends ChangeNotifier {
   bool loading = false;
   final requests = <ServiceRequest>[...demoRequests];
   List<Map<String, dynamic>> agents = [];
-  final auditLogs = <AuditLog>[];
+  List<Map<String, dynamic>> customers = [];
+  List<AuditLog> auditLogs = [];
 
   bool get supabaseConfigured =>
       dotenv.isInitialized &&
@@ -115,6 +116,8 @@ Future<void> signIn(
 if (role == AppRole.admin) {
   await loadAdminRequests();
   await loadAgents();
+  await loadCustomers();
+  await loadAuditLogs();
 } else if (role == AppRole.agent) {
   await loadAgentRequests();
 } else if (role == AppRole.customer) {
@@ -354,6 +357,53 @@ Future<void> loadAgents() async {
   } catch (e) {
     errorMessage = 'Failed to load agents: $e';
     debugPrint('Agent load error: $e');
+  }
+
+  notifyListeners();
+}
+Future<void> loadCustomers() async {
+  if (supabase == null || role != AppRole.admin) return;
+
+  try {
+    final rows = await supabase!
+        .from('profiles')
+        .select('id, full_name, email')
+        .eq('role', 'CUSTOMER')
+        .order('full_name');
+
+    customers = List<Map<String, dynamic>>.from(rows);
+
+    debugPrint('Admin loaded ${customers.length} customers from Supabase');
+  } catch (e) {
+    errorMessage = 'Failed to load customers: $e';
+    debugPrint('Customer load error: $e');
+  }
+
+  notifyListeners();
+}
+Future<void> loadAuditLogs() async {
+  if (supabase == null || role != AppRole.admin) return;
+
+  try {
+    final rows = await supabase!
+        .from('audit_logs')
+        .select()
+        .order('created_at', ascending: false)
+        .limit(20);
+
+    auditLogs = rows.map((row) {
+      return AuditLog(
+        eventType: row['event_type'] as String,
+        actorId: row['user_id']?.toString() ?? 'System',
+        entityId: row['entity_id']?.toString() ?? '',
+        message: row['metadata']?.toString() ?? '',
+      );
+    }).toList();
+
+    debugPrint('Admin loaded ${auditLogs.length} audit logs from Supabase');
+  } catch (e) {
+    errorMessage = 'Failed to load audit logs: $e';
+    debugPrint('Audit log load error: $e');
   }
 
   notifyListeners();

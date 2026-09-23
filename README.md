@@ -34,17 +34,20 @@ flutter test
 flutter analyze
 ```
 
-## Demo accounts
+## Test accounts
 
-The local fallback accepts any non-empty email/password. The role is selected by the email pattern:
+The Supabase-backed demo includes the following test accounts:
 
-| Role | Demo email pattern |
+| Role | Email |
 |---|---|
-| Customer | `customer@example.com` |
-| Agent | `agent@example.com` |
-| Admin | `admin@example.com` |
+| Customer | `dhanshree@gmail.com` |
+| Agent | `agent@quickserve.com` |
+| Agent | `agent2@quickserve.com` |
+| Admin | `admin@quickserve.com` |
 
-With Supabase configured, credentials and roles come from Supabase Auth and the `profiles.role` value. Never commit `.env` or service-role keys.
+Passwords are provided separately to the evaluator and are not committed to the repository.
+
+For local fallback mode, non-empty email/password values can be used for demonstration.
 
 ## Requirement coverage
 
