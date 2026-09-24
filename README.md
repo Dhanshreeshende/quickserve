@@ -517,7 +517,7 @@ The following demo accounts are available for evaluation:
 
 | Role | Email |
 |---|---|
-| Customer | dhanshree@gmail.com |
+| Customer | dhanshree30@gmail.com |
 | Agent | agent@quickserve.com |
 | Agent | agent2@quickserve.com |
 | Admin | admin@quickserve.com |
