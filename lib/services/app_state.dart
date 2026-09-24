@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -744,23 +743,6 @@ Future<bool> assignAgent(ServiceRequest request, String agent) async {
 
   Future<void> _persistSession() async {
     await _preferences?.setString('quickserve.role', role.name);
-  }
-
-  Future<void> _persistRequests() async {
-    await _preferences?.setString(
-      'quickserve.requests',
-      jsonEncode(
-        requests
-            .map(
-              (r) => {
-                'id': r.id,
-                'service': r.service.name,
-                'status': r.status.name,
-              },
-            )
-            .toList(),
-      ),
-    );
   }
 
   void _loadLocalRequests() {

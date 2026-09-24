@@ -1,64 +1,535 @@
-# QuickServe Flutter
+# QuickServe — Service Request Management System
 
-QuickServe is a full-stack Service Request Management application built as a **Flutter mobile app for Android/iOS and Flutter Web admin portal**, backed by Supabase. It satisfies the Swasiq internship assignment requirements: customer request creation/tracking, agent work management, admin operations, authentication, RBAC, audit events, error handling, documentation, and tests.
+QuickServe is a full-stack Service Request Management application built for the **Swasiq Technology Internship Technical Assignment**.
 
-## Technology
+The application provides separate workflows for **Customers, Service Agents, and Administrators**, using Flutter for the application and responsive web portal, with Supabase and PostgreSQL as the backend.
 
-- Flutter/Dart, Material 3, responsive Flutter Web
-- Supabase Auth and PostgreSQL with Row Level Security
-- `shared_preferences` for offline/session persistence
-- `supabase_flutter`, `flutter_dotenv`, `intl`, and `uuid`
-- `flutter_test` for domain/widget tests
+The project focuses on secure role-based access, service-request lifecycle management, backend authorization, audit logging, error handling, responsive UI, testing, and maintainable project structure.
 
-## Run locally
+---
 
-Install Flutter 3.24+ and Dart 3.5+, then:
+## 1. Project Overview
+
+QuickServe manages service requests for common household services:
+
+- AC Servicing
+- Plumbing
+- Electrical
+- Cleaning
+
+The application connects three types of users:
+
+**Customer → creates and tracks requests**
+
+**Service Agent → manages assigned work**
+
+**Administrator → manages requests, users, assignments, and activity**
+
+### Request Lifecycle
+
+```text
+CREATED → ASSIGNED → ACCEPTED → IN_PROGRESS → COMPLETED
+
+Eligible requests can also be cancelled:
+CREATED / ASSIGNED → CANCELLED
+
+Each request receives a unique identifier such as:
+REQ-2026-000123
+
+---
+
+## 2. Key Features
+
+### Customer
+
+- Registration and login
+- Password reset
+- Session persistence
+- Browse available services
+- Create service requests
+- Select service type
+- Enter service description
+- Select preferred date and time
+- Enter service address
+- Select priority: Low / Medium / High
+- View own requests
+- Track request status
+- View request details
+- Cancel eligible requests
+- Profile and logout
+
+### Service Agent
+
+- Secure login
+- View assigned service requests
+- Accept assigned requests
+- Update request status
+- Add optional notes during status updates
+- View completed work
+- View request details
+
+### Administrator
+
+- Responsive Flutter Web administration portal
+- Dashboard with request statistics
+- Request management
+- Search and filtering
+- View request details
+- Assign agents
+- Update request status
+- View customers
+- View agents
+- Review audit/activity information
+
+---
+
+## 3. Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Application | Flutter / Dart |
+| Web Admin Portal | Flutter Web |
+| UI | Material 3 |
+| Authentication | Supabase Auth |
+| Backend | Supabase |
+| Database | PostgreSQL |
+| Authorization | PostgreSQL Row Level Security (RLS) |
+| State / Repository Layer | AppState |
+| Local Persistence | shared_preferences |
+| Environment Configuration | flutter_dotenv |
+| Date / Time | intl |
+| Request IDs | uuid |
+| Testing | flutter_test |
+| Version Control | Git / GitHub |
+
+---
+
+## 4. Architecture
+
+QuickServe uses a shared Flutter codebase for the customer, service-agent, and administrator experiences.
+
+```mermaid
+flowchart LR
+    C[Customer Flutter App]
+    A[Agent Workspace]
+    W[Flutter Web Admin Portal]
+
+    C --> S[AppState / Repository Boundary]
+    A --> S
+    W --> S
+
+    S --> AUTH[Supabase Auth]
+    S --> DB[(PostgreSQL + RLS)]
+    S --> LOCAL[Local Session / Fallback State]
+
+    DB --> REQ[Service Requests]
+    DB --> HIST[Request Status History]
+    DB --> AUDIT[Audit Logs]
+    DB --> PROF[User Profiles]
+    DB --> SERV[Services]
+
+    Architecture Approach
+
+The application separates UI concerns from backend and data operations through the AppState layer.
+Flutter UI
+     ↓
+AppState / Repository Boundary
+     ↓
+Supabase Auth + PostgreSQL
+     ↓
+RLS / Database Authorization
+
+The Flutter UI controls presentation and user interaction, while backend policies provide the final authorization boundary.
+
+UI visibility is therefore not treated as the security mechanism.
+
+---
+
+## 5. User Roles & Authorization
+
+QuickServe implements three roles:
+
+| Capability | Customer | Agent | Admin |
+|---|:---:|:---:|:---:|
+| Register / Login | ✓ | ✓ | ✓ |
+| Create Request | ✓ | — | ✓ |
+| View Own Requests | ✓ | ✓ | ✓ |
+| View All Requests | — | — | ✓ |
+| Manage Assigned Requests | — | ✓ | ✓ |
+| Assign Agents | — | — | ✓ |
+| Manage Operational Data | — | Assigned only | ✓ |
+| View Audit Activity | — | — | ✓ |
+
+Authorization is enforced at the backend/database layer using **Supabase Row Level Security (RLS)** and guarded database operations.
+
+---
+
+## 6. Request Creation
+
+Customers can create a service request by providing:
+
+- Service type
+- Description
+- Preferred date
+- Preferred time
+- Complete service address
+- Priority: Low / Medium / High
+
+The application generates a unique request ID.
+
+Example:
+
+```text
+REQ-2026-000011
+
+---
+
+## 7. Request Lifecycle Management
+
+The request state is controlled through defined lifecycle transitions.
+
+```text
+CREATED
+   │
+   ▼
+ASSIGNED
+   │
+   ▼
+ACCEPTED
+   │
+   ▼
+IN_PROGRESS
+   │
+   ▼
+COMPLETED
+Eligible requests can be cancelled from supported states.
+
+Status changes are recorded through the request status history mechanism.
+
+This allows the application to maintain both the current request state and the history of lifecycle changes.
+
+---
+
+## 8. Database Design
+
+The Supabase PostgreSQL database contains the core entities required for the application.
+
+### Main Entities
+
+```text
+profiles
+    │
+    ├───────────────┐
+    │               │
+    ▼               ▼
+customers       agents
+    │               │
+    └───────┬───────┘
+            ▼
+    service_requests
+            │
+       ┌────┴─────┐
+       ▼          ▼
+request_status  audit_logs
+_history
+
+profiles
+
+Stores application users and their roles.
+
+Roles include:
+
+CUSTOMER
+AGENT
+ADMIN
+services
+
+Stores the available service categories:
+
+AC Servicing
+Plumbing
+Electrical
+Cleaning
+service_requests
+
+Stores the main service-request record, including:
+
+Request ID
+Customer
+Assigned agent
+Service
+Description
+Preferred date/time
+Address
+Priority
+Current status
+Created timestamp
+request_status_history
+
+Stores request lifecycle transitions and status-change information.
+
+audit_logs
+
+Stores meaningful application and security events such as:
+
+LOGIN_SUCCESS
+REQUEST_CREATED
+REQUEST_ASSIGNED
+REQUEST_UPDATED
+AUTHORIZATION_FAILED
+DATABASE_ERROR
+
+The database schema also contains supporting indexes, constraints, guarded database operations, and supporting tables.
+---
+
+## 9. Security
+
+Security is implemented at multiple layers.
+
+### Authentication
+
+Supabase Auth handles:
+
+- Registration
+- Login
+- Logout
+- Session persistence
+- Password reset
+
+### Backend Authorization
+
+Supabase PostgreSQL **Row Level Security (RLS)** is used to enforce access boundaries.
+
+Examples:
+
+- Customers can access only their own service requests.
+- Agents can manage requests assigned to them.
+- Administrators can access operational data required for administration.
+
+### Defense in Depth
+
+The application uses UI-level role restrictions for the user experience, while backend/database authorization remains the authoritative security layer.
+
+### Secrets
+
+Sensitive configuration is stored through environment configuration.
+
+Passwords, authentication tokens, API keys, and other secrets are not committed to the repository or written to audit logs.
+---
+
+## 10. Audit Logging
+
+QuickServe records meaningful operational and security events.
+
+Examples include:
+
+```text
+LOGIN_SUCCESS
+REQUEST_CREATED
+REQUEST_ASSIGNED
+REQUEST_UPDATED
+AUTHORIZATION_FAILED
+DATABASE_ERROR
+
+Audit information allows administrators to review important activity associated with the service-request workflow.
+
+---
+
+## 11. Error Handling
+
+The application handles common failure scenarios including:
+
+- Invalid input
+- Authentication failures
+- Unauthorized operations
+- Backend/database failures
+- Invalid request lifecycle transitions
+- Network/backend errors
+
+User-facing errors are presented as safe messages without exposing sensitive backend information.
+
+---
+
+## 12. Screenshots
+
+The following screenshots demonstrate the main application workflows.
+
+### Login
+
+![QuickServe Login](docs/screenshots/login.png)
+
+### Customer Home
+
+![Customer Home](docs/screenshots/customer-home.png)
+
+### Request Details
+
+![Request Details](docs/screenshots/request-details.png)
+
+### Agent Dashboard
+
+![Agent Dashboard](docs/screenshots/agent-dashboard.png)
+
+### Admin Dashboard
+
+![Admin Dashboard](docs/screenshots/admin-dashboard.png)
+
+### Admin — Customers & Agents
+
+![Admin Users](docs/screenshots/admin-users.png)
+
+### Admin — Audit Activity
+
+![Admin Audit Activity](docs/screenshots/admin-audit.png)
+---
+
+## 13. Project Structure
+
+```text
+quickserve_flutter/
+│
+├── lib/
+│   ├── main.dart
+│   ├── models/
+│   │   └── domain.dart
+│   └── services/
+│       └── app_state.dart
+│
+├── assets/
+│   └── images/
+│       └── quickserve_logo.svg
+│
+├── docs/
+│   ├── architecture.md
+│   └── screenshots/
+│       ├── login.png
+│       ├── customer-home.png
+│       ├── request-details.png
+│       ├── agent-dashboard.png
+│       ├── admin-dashboard.png
+│       ├── admin-users.png
+│       └── admin-audit.png
+│
+├── test/
+│   └── widget_test.dart
+│
+├── supabase_schema.sql
+├── env.example
+├── pubspec.yaml
+└── README.md
+---
+
+## 14. Local Setup
+
+### Prerequisites
+
+Install:
+
+- Flutter 3.24+
+- Dart 3.5+
+- Git
+
+### Clone the Repository
 
 ```bash
+git clone https://github.com/Dhanshreeshende/quickserve.git
+cd quickserve_flutter
+
+nstall Dependencies
 flutter pub get
+Configure Environment
+
+Create a .env file from the provided example:
+
 cp env.example .env
-# Add SUPABASE_URL and SUPABASE_ANON_KEY for live backend mode.
+
+Add the required Supabase configuration:
+
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+
+Never commit the .env file.
+
+Run the Application
 flutter run
-```
-
-Run web admin mode:
-
-```bash
+Run the Web Admin Portal
 flutter run -d chrome
-```
+---
 
-Run tests and static analysis:
+## 15. Testing
+
+Run the Flutter test suite:
 
 ```bash
 flutter test
+Run static analysis:
+
 flutter analyze
-```
 
-## Test accounts
+The project includes Flutter domain/widget tests covering core application behaviour.
 
-The Supabase-backed demo includes the following test accounts:
+Backend authorization and customer data isolation were also verified against the Supabase RLS policies during functional testing.
+
+A customer-data isolation scenario was verified to ensure that a customer can access only their own service requests
+---
+
+## 16. Test Accounts
+
+The following demo accounts are available for evaluation:
 
 | Role | Email |
 |---|---|
-| Customer | `dhanshree@gmail.com` |
+| Customer | `dhanshree30@gmail.com` |
 | Agent | `agent@quickserve.com` |
 | Agent | `agent2@quickserve.com` |
 | Admin | `admin@quickserve.com` |
 
-Passwords are provided separately to the evaluator and are not committed to the repository.
+Passwords are provided separately to the evaluator and are **not committed to the repository**.
+---
 
-For local fallback mode, non-empty email/password values can be used for demonstration.
+## 17. End-to-End Workflow
 
-## Requirement coverage
+A complete request workflow can be demonstrated as:
 
-Customer screens include splash/authentication, registration, password reset, home, service catalog, create request, request history, request details, cancellation, profile, and logout. Agents can view assigned work, accept/update statuses, add notes through the request state layer, and see completed work. Administrators have a responsive Flutter Web operations console with KPIs, request search/filtering, assignments, status management, customer/agent-visible data, and audit activity.
+```text
+Customer
+   │
+   ├── Login
+   ├── Select Service
+   ├── Create Request
+   │
+   ▼
+CREATED
+   │
+   ▼
+Admin
+   ├── View Request
+   └── Assign Agent
+   │
+   ▼
+ASSIGNED
+   │
+   ▼
+Agent
+   ├── Accept Request
+   ├── Start Work
+   ├── Add Notes
+   └── Complete Work
+   │
+   ▼
+COMPLETED
+---
 
-The request lifecycle is `CREATED → ASSIGNED → ACCEPTED → IN_PROGRESS → COMPLETED`; cancellation is limited to `CREATED` and `ASSIGNED`. Request IDs follow `REQ-YYYY-NNNNNN`. The Supabase schema in `supabase_schema.sql` contains profiles, services, service requests, status history, audit logs, device tokens, analytics events, indexes, RPC guards, and RLS policies.
+## 17. Documentation & Repository
 
-## Architecture
+Additional project documentation is available in:
 
-`lib/models/domain.dart` contains the domain model and authorization rules. `lib/services/app_state.dart` is the application state/repository boundary: it manages session persistence, local fallback, Supabase Auth hooks, request mutations, lifecycle validation, and audit events. `lib/main.dart` contains the responsive route shell and customer/agent/admin screens. The production Supabase policies remain the final authorization boundary; UI visibility is not treated as security.
+- `docs/architecture.md` — application architecture and RBAC overview
+- `supabase_schema.sql` — database schema, policies, and backend configuration
+- `env.example` — environment configuration template
 
-## Error handling and security
+The project is maintained using Git and GitHub with environment secrets excluded from version control.
 
-Invalid input, invalid lifecycle transitions, unauthorized mutations, auth errors, and backend failures return user-safe messages. Audit event types include `LOGIN_SUCCESS`, `REQUEST_CREATED`, `REQUEST_ASSIGNED`, `REQUEST_UPDATED`, `AUTHORIZATION_FAILED`, and `DATABASE_ERROR`. Passwords, auth tokens, API keys, and secrets are never logged.
+### GitHub Repository
+
+https://github.com/Dhanshreeshende/quickserve

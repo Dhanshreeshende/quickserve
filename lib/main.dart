@@ -1796,6 +1796,7 @@ class _AdminScreenState extends State<AdminScreen> {
     request,
     value.substring(7),
   ).then((success) {
+    if (!context.mounted) return;
     if (!success && state.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
