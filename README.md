@@ -29,12 +29,19 @@ The application connects three types of users:
 
 ```text
 CREATED → ASSIGNED → ACCEPTED → IN_PROGRESS → COMPLETED
+```
 
 Eligible requests can also be cancelled:
+
+```text
 CREATED / ASSIGNED → CANCELLED
+```
 
 Each request receives a unique identifier such as:
+
+```text
 REQ-2026-000123
+```
 
 ---
 
@@ -99,6 +106,7 @@ REQ-2026-000123
 | Environment Configuration | flutter_dotenv |
 | Date / Time | intl |
 | Request IDs | uuid |
+| SVG Assets | flutter_svg |
 | Testing | flutter_test |
 | Version Control | Git / GitHub |
 
@@ -108,36 +116,19 @@ REQ-2026-000123
 
 QuickServe uses a shared Flutter codebase for the customer, service-agent, and administrator experiences.
 
-```mermaid
-flowchart LR
-    C[Customer Flutter App]
-    A[Agent Workspace]
-    W[Flutter Web Admin Portal]
+### Architecture Approach
 
-    C --> S[AppState / Repository Boundary]
-    A --> S
-    W --> S
+The application separates UI concerns from backend and data operations through the `AppState` layer.
 
-    S --> AUTH[Supabase Auth]
-    S --> DB[(PostgreSQL + RLS)]
-    S --> LOCAL[Local Session / Fallback State]
-
-    DB --> REQ[Service Requests]
-    DB --> HIST[Request Status History]
-    DB --> AUDIT[Audit Logs]
-    DB --> PROF[User Profiles]
-    DB --> SERV[Services]
-
-    Architecture Approach
-
-The application separates UI concerns from backend and data operations through the AppState layer.
+```text
 Flutter UI
-     ↓
+    ↓
 AppState / Repository Boundary
-     ↓
+    ↓
 Supabase Auth + PostgreSQL
-     ↓
+    ↓
 RLS / Database Authorization
+```
 
 The Flutter UI controls presentation and user interaction, while backend policies provide the final authorization boundary.
 
@@ -162,6 +153,12 @@ QuickServe implements three roles:
 
 Authorization is enforced at the backend/database layer using **Supabase Row Level Security (RLS)** and guarded database operations.
 
+Examples include:
+
+- Customers can access only their own service requests.
+- Agents can manage requests assigned to them.
+- Administrators can access operational data required for administration.
+
 ---
 
 ## 6. Request Creation
@@ -181,6 +178,9 @@ Example:
 
 ```text
 REQ-2026-000011
+```
+
+Date and time are selected using Flutter date and time picker interactions.
 
 ---
 
@@ -202,7 +202,13 @@ IN_PROGRESS
    │
    ▼
 COMPLETED
-Eligible requests can be cancelled from supported states.
+```
+
+Eligible requests can also be cancelled from supported states:
+
+```text
+CREATED / ASSIGNED → CANCELLED
+```
 
 Status changes are recorded through the request status history mechanism.
 
@@ -230,56 +236,61 @@ customers       agents
             │
        ┌────┴─────┐
        ▼          ▼
-request_status  audit_logs
+request_status   audit_logs
 _history
+```
 
-profiles
+### profiles
 
 Stores application users and their roles.
 
 Roles include:
 
-CUSTOMER
-AGENT
-ADMIN
-services
+- CUSTOMER
+- AGENT
+- ADMIN
+
+### services
 
 Stores the available service categories:
 
-AC Servicing
-Plumbing
-Electrical
-Cleaning
-service_requests
+- AC Servicing
+- Plumbing
+- Electrical
+- Cleaning
+
+### service_requests
 
 Stores the main service-request record, including:
 
-Request ID
-Customer
-Assigned agent
-Service
-Description
-Preferred date/time
-Address
-Priority
-Current status
-Created timestamp
-request_status_history
+- Request ID
+- Customer
+- Assigned agent
+- Service
+- Description
+- Preferred date/time
+- Address
+- Priority
+- Current status
+- Created timestamp
+
+### request_status_history
 
 Stores request lifecycle transitions and status-change information.
 
-audit_logs
+### audit_logs
 
 Stores meaningful application and security events such as:
 
-LOGIN_SUCCESS
-REQUEST_CREATED
-REQUEST_ASSIGNED
-REQUEST_UPDATED
-AUTHORIZATION_FAILED
-DATABASE_ERROR
+- `LOGIN_SUCCESS`
+- `REQUEST_CREATED`
+- `REQUEST_ASSIGNED`
+- `REQUEST_UPDATED`
+- `AUTHORIZATION_FAILED`
+- `DATABASE_ERROR`
 
 The database schema also contains supporting indexes, constraints, guarded database operations, and supporting tables.
+
 ---
 
 ## 9. Security
@@ -298,7 +309,7 @@ Supabase Auth handles:
 
 ### Backend Authorization
 
-Supabase PostgreSQL **Row Level Security (RLS)** is used to enforce access boundaries.
+Supabase PostgreSQL Row Level Security (RLS) is used to enforce access boundaries.
 
 Examples:
 
@@ -315,6 +326,7 @@ The application uses UI-level role restrictions for the user experience, while b
 Sensitive configuration is stored through environment configuration.
 
 Passwords, authentication tokens, API keys, and other secrets are not committed to the repository or written to audit logs.
+
 ---
 
 ## 10. Audit Logging
@@ -330,6 +342,7 @@ REQUEST_ASSIGNED
 REQUEST_UPDATED
 AUTHORIZATION_FAILED
 DATABASE_ERROR
+```
 
 Audit information allows administrators to review important activity associated with the service-request workflow.
 
@@ -376,17 +389,18 @@ The following screenshots demonstrate the main application workflows.
 
 ### Admin — Customers & Agents
 
-![Admin Users](docs/screenshots/admin-users.png)
+![Admin Customers and Agents](docs/screenshots/admin-users.png)
 
 ### Admin — Audit Activity
 
 ![Admin Audit Activity](docs/screenshots/admin-audit.png)
+
 ---
 
 ## 13. Project Structure
 
 ```text
-quickserve_flutter/
+quickserve/
 │
 ├── lib/
 │   ├── main.dart
@@ -417,6 +431,8 @@ quickserve_flutter/
 ├── env.example
 ├── pubspec.yaml
 └── README.md
+```
+
 ---
 
 ## 14. Local Setup
@@ -433,27 +449,44 @@ Install:
 
 ```bash
 git clone https://github.com/Dhanshreeshende/quickserve.git
-cd quickserve_flutter
+cd quickserve
+```
 
-nstall Dependencies
+### Install Dependencies
+
+```bash
 flutter pub get
-Configure Environment
+```
 
-Create a .env file from the provided example:
+### Configure Environment
 
+Create a `.env` file from the provided example:
+
+```bash
 cp env.example .env
+```
 
 Add the required Supabase configuration:
 
+```env
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-Never commit the .env file.
+Never commit the `.env` file.
 
-Run the Application
+### Run the Application
+
+```bash
 flutter run
-Run the Web Admin Portal
+```
+
+### Run the Web Admin Portal
+
+```bash
 flutter run -d chrome
+```
+
 ---
 
 ## 15. Testing
@@ -462,15 +495,20 @@ Run the Flutter test suite:
 
 ```bash
 flutter test
+```
+
 Run static analysis:
 
+```bash
 flutter analyze
+```
 
 The project includes Flutter domain/widget tests covering core application behaviour.
 
 Backend authorization and customer data isolation were also verified against the Supabase RLS policies during functional testing.
 
-A customer-data isolation scenario was verified to ensure that a customer can access only their own service requests
+A customer-data isolation scenario was verified to ensure that a customer can access only their own service requests.
+
 ---
 
 ## 16. Test Accounts
@@ -479,45 +517,13 @@ The following demo accounts are available for evaluation:
 
 | Role | Email |
 |---|---|
-| Customer | `dhanshree30@gmail.com` |
-| Agent | `agent@quickserve.com` |
-| Agent | `agent2@quickserve.com` |
-| Admin | `admin@quickserve.com` |
+| Customer | dhanshree@gmail.com |
+| Agent | agent@quickserve.com |
+| Agent | agent2@quickserve.com |
+| Admin | admin@quickserve.com |
 
-Passwords are provided separately to the evaluator and are **not committed to the repository**.
----
+Passwords are provided separately to the evaluator and are not committed to the repository.
 
-## 17. End-to-End Workflow
-
-A complete request workflow can be demonstrated as:
-
-```text
-Customer
-   │
-   ├── Login
-   ├── Select Service
-   ├── Create Request
-   │
-   ▼
-CREATED
-   │
-   ▼
-Admin
-   ├── View Request
-   └── Assign Agent
-   │
-   ▼
-ASSIGNED
-   │
-   ▼
-Agent
-   ├── Accept Request
-   ├── Start Work
-   ├── Add Notes
-   └── Complete Work
-   │
-   ▼
-COMPLETED
 ---
 
 ## 17. Documentation & Repository
