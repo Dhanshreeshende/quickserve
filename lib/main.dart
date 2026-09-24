@@ -527,10 +527,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   Priority priority = Priority.medium;
   DateTime date = DateTime.now();
   final description = TextEditingController();
-  final time = TextEditingController(text: '4:00 PM ? 6:00 PM');
-  final address = TextEditingController(
-    text: 'Flat 402, Lotus Heights, Pratap Nagar',
-  );
+  final time = TextEditingController(text: '4:00 PM');
+  final address = TextEditingController();
 
   @override
   void dispose() {
@@ -596,38 +594,66 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: address,
-            decoration: const InputDecoration(labelText: 'Address'),
-          ),
+  controller: address,
+  maxLines: 3,
+  minLines: 2,
+  decoration: const InputDecoration(
+    labelText: 'Service address',
+    hintText: 'Enter your complete service address',
+    prefixIcon: Icon(Icons.location_on_outlined),
+    alignLabelWithHint: true,
+  ),
+),
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(DateFormat('d MMM yyyy').format(date)),
-                  subtitle: const Text('Preferred date'),
-                  trailing: const Icon(Icons.calendar_today),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 90)),
-                      initialDate: date,
-                    );
-                    if (picked != null && mounted) {
-                      setState(() => date = picked);
-                    }
-                  },
-                ),
-              ),
+             Expanded(
+  child: TextField(
+    readOnly: true,
+    decoration: const InputDecoration(
+      labelText: 'Preferred date',
+      suffixIcon: Icon(Icons.calendar_today),
+    ),
+    controller: TextEditingController(
+      text: DateFormat('d MMM yyyy').format(date),
+    ),
+    onTap: () async {
+      final picked = await showDatePicker(
+        context: context,
+        firstDate: DateTime.now(),
+        lastDate: DateTime.now().add(const Duration(days: 90)),
+        initialDate: date,
+      );
+
+      if (picked != null && mounted) {
+        setState(() => date = picked);
+      }
+    },
+  ),
+),
               const SizedBox(width: 8),
               Expanded(
-                child: TextField(
-                  controller: time,
-                  decoration: const InputDecoration(labelText: 'Time'),
-                ),
-              ),
+  child: TextField(
+    controller: time,
+    readOnly: true,
+    decoration: const InputDecoration(
+      labelText: 'Preferred time',
+      suffixIcon: Icon(Icons.access_time),
+    ),
+    onTap: () async {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: const TimeOfDay(hour: 16, minute: 0),
+      );
+
+      if (picked != null && mounted) {
+        setState(() {
+          time.text = picked.format(context);
+        });
+      }
+    },
+  ),
+),
             ],
           ),
           const SizedBox(height: 12),
