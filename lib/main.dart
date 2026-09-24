@@ -775,58 +775,137 @@ class RequestDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = lifecycle.indexOf(request.status);
+
     return AppPage(
       title: request.id,
       eyebrow: request.service.label.toUpperCase(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
         children: [
           Card(
-            child: ListTile(
-              title: Text(request.description),
-              subtitle: Text(
-                '${request.address}\n${DateFormat('d MMM yyyy').format(request.preferredDate)} · ${request.preferredTime}',
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: const Color(0xFFFFE7DF),
+                        child: Icon(
+                          Icons.home_repair_service,
+                          color: const Color(0xFFF26B4D),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              request.service.label,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              request.status.label,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    request.description,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _DetailRow(
+                    icon: Icons.location_on_outlined,
+                    label: 'Service address',
+                    value: request.address,
+                  ),
+                  const SizedBox(height: 10),
+                  _DetailRow(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Preferred schedule',
+                    value:
+                        '${DateFormat('d MMM yyyy').format(request.preferredDate)} · ${request.preferredTime}',
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 18),
+
+          const SizedBox(height: 22),
+
           Text(
             'Request progress',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+                  fontWeight: FontWeight.w800,
+                ),
           ),
           const SizedBox(height: 12),
-          ...lifecycle.map(
-            (status) => ListTile(
-              leading: CircleAvatar(
-                backgroundColor:
-                    lifecycle.indexOf(status) <= lifecycle.indexOf(request.status)
-                        ? const Color(0xFF1E9E96)
-                        : Colors.grey.shade200,
-                child: Icon(
-                  lifecycle.indexOf(status) <= lifecycle.indexOf(request.status)
-                      ? Icons.check
-                      : Icons.circle,
-                  color: Colors.white,
-                  size: 16,
-                ),
+
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 14,
               ),
-              title: Text(status.label),
-              dense: true,
+              child: Column(
+                children: [
+                  for (int i = 0; i < lifecycle.length; i++)
+                    _ProgressStep(
+                      title: lifecycle[i].label,
+                      active: i <= currentIndex,
+                      current: i == currentIndex,
+                      isLast: i == lifecycle.length - 1,
+                    ),
+                ],
+              ),
             ),
           ),
-          if (request.assignedAgent != null)
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: Text(request.assignedAgent!),
-              subtitle: Text(request.agentNote ?? 'Assigned service professional'),
+
+          if (request.assignedAgent != null) ...[
+            const SizedBox(height: 18),
+            Card(
+              child: ListTile(
+                leading: const CircleAvatar(
+                  child: Icon(Icons.person_outline),
+                ),
+                title: Text(
+                  request.assignedAgent!,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  request.agentNote ?? 'Assigned service professional',
+                ),
+              ),
             ),
+          ],
+
           if (request.status == RequestStatus.created ||
-              request.status == RequestStatus.assigned)
+              request.status == RequestStatus.assigned) ...[
+            const SizedBox(height: 18),
             OutlinedButton.icon(
               onPressed: () async {
-                await state.updateStatus(request, RequestStatus.cancelled);
+                await state.updateStatus(
+                  request,
+                  RequestStatus.cancelled,
+                );
                 if (context.mounted) {
                   Navigator.pop(context);
                 }
@@ -834,8 +913,114 @@ class RequestDetailScreen extends StatelessWidget {
               icon: const Icon(Icons.close),
               label: const Text('Cancel request'),
             ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: 19,
+          color: const Color(0xFF1565D8),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProgressStep extends StatelessWidget {
+  const _ProgressStep({
+    required this.title,
+    required this.active,
+    required this.current,
+    required this.isLast,
+  });
+
+  final String title;
+  final bool active;
+  final bool current;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            CircleAvatar(
+              radius: 15,
+              backgroundColor: active
+                  ? const Color(0xFF1E9E96)
+                  : Colors.grey.shade200,
+              child: Icon(
+                active ? Icons.check : Icons.circle,
+                size: 15,
+                color: active ? Colors.white : Colors.grey.shade500,
+              ),
+            ),
+            if (!isLast)
+              Container(
+                width: 2,
+                height: 34,
+                color: active
+                    ? const Color(0xFF1E9E96)
+                    : Colors.grey.shade200,
+              ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontWeight: current ? FontWeight.w800 : FontWeight.w600,
+              color: active ? Colors.black87 : Colors.grey.shade500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1953,47 +2138,75 @@ class ServiceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final icon = switch (service) {
+      ServiceType.ac => Icons.ac_unit,
+      ServiceType.plumbing => Icons.plumbing,
+      ServiceType.electrical => Icons.bolt,
+      ServiceType.cleaning => Icons.cleaning_services,
+    };
+
+    final price = switch (service) {
+      ServiceType.ac => '499',
+      ServiceType.plumbing => '299',
+      ServiceType.electrical => '249',
+      ServiceType.cleaning => '599',
+    };
+
     return SizedBox(
       width: large ? 180 : 120,
       child: Card(
+        elevation: 0,
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CircleAvatar(
-                  radius: 18,
+                  radius: large ? 22 : 20,
                   backgroundColor: const Color(0xFFFFE7DF),
                   child: Icon(
-                    switch (service) {
-                      ServiceType.ac => Icons.ac_unit,
-                      ServiceType.plumbing => Icons.plumbing,
-                      ServiceType.electrical => Icons.bolt,
-                      ServiceType.cleaning => Icons.cleaning_services,
-                    },
+                    icon,
                     color: const Color(0xFFF26B4D),
-                    size: 18,
+                    size: large ? 21 : 19,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 14),
                 Text(
                   service.label,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: large ? 15 : 14,
+                  ),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  'From ₹${switch (service) {
-                    ServiceType.ac => '499',
-                    ServiceType.plumbing => '299',
-                    ServiceType.electrical => '249',
-                    ServiceType.cleaning => '599',
-                  }}',
+                  'Starting at ₹$price',
                   style: TextStyle(
                     color: Colors.grey.shade600,
                     fontSize: 11,
                   ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Text(
+                      'Book now',
+                      style: TextStyle(
+                        color: const Color(0xFF1565D8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 15,
+                      color: const Color(0xFF1565D8),
+                    ),
+                  ],
                 ),
               ],
             ),
